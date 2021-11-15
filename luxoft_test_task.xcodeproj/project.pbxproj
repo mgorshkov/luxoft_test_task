@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B475CEF326D101C1006E002E /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B475CEF226D101C1006E002E /* main.cpp */; };
+		B40A6AEB274262D300045D50 /* Main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B40A6AEA274262D300045D50 /* Main.cpp */; };
+		B43C72DF26EFF06D00233F55 /* Knights.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B43C72DE26EFF06D00233F55 /* Knights.cpp */; };
+		B475CEF326D101C1006E002E /* Increment.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B475CEF226D101C1006E002E /* Increment.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -23,8 +25,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B40A6AEA274262D300045D50 /* Main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Main.cpp; sourceTree = "<group>"; };
+		B43C72DE26EFF06D00233F55 /* Knights.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Knights.cpp; sourceTree = "<group>"; };
+		B43C72E026F130D600233F55 /* TimeLogger.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = TimeLogger.hpp; sourceTree = "<group>"; };
 		B475CEEF26D101C1006E002E /* luxoft_test_task */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = luxoft_test_task; sourceTree = BUILT_PRODUCTS_DIR; };
-		B475CEF226D101C1006E002E /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		B475CEF226D101C1006E002E /* Increment.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Increment.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,7 +46,10 @@
 		B475CEE626D101C0006E002E = {
 			isa = PBXGroup;
 			children = (
-				B475CEF126D101C1006E002E /* luxoft_test_task */,
+				B40A6AEA274262D300045D50 /* Main.cpp */,
+				B43C72E026F130D600233F55 /* TimeLogger.hpp */,
+				B475CEF226D101C1006E002E /* Increment.cpp */,
+				B43C72DE26EFF06D00233F55 /* Knights.cpp */,
 				B475CEF026D101C1006E002E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,14 +60,6 @@
 				B475CEEF26D101C1006E002E /* luxoft_test_task */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		B475CEF126D101C1006E002E /* luxoft_test_task */ = {
-			isa = PBXGroup;
-			children = (
-				B475CEF226D101C1006E002E /* main.cpp */,
-			);
-			path = luxoft_test_task;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -118,7 +118,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B475CEF326D101C1006E002E /* main.cpp in Sources */,
+				B40A6AEB274262D300045D50 /* Main.cpp in Sources */,
+				B43C72DF26EFF06D00233F55 /* Knights.cpp in Sources */,
+				B475CEF326D101C1006E002E /* Increment.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
