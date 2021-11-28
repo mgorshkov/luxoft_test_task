@@ -6,6 +6,7 @@
 //
 
 #include <iostream>
+#include <string.h>
 
 static const char* HELP = "luxoft_test_task increment <num_threads> <max_increment>\nluxoft_test_task knights <num_threads>";
 

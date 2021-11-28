@@ -5,11 +5,13 @@
 // 1a. What are some of the difficulties in adding more threads? Please show the difficulties with code.
 // 1b. Extra credit – Design an improved solution to the above that can scale with many threads
 
-// I have considered 3 different solutions:
-// * Double-check with std::mutex
-// * Double-check with lock-free mutex
+// I have considered 4 different solutions:
+// * std::mutex
+// * lock-free mutex
 // * Wait-notify approach with std::condition_variable
-// Out of these 3 approaches, we get the best performance and scaling with wait-notify.
+// * direct lock-free increment
+// For each solution, thread pinning is available
+// Out of these 4 approaches, we get the best performance and scaling with lock-free increment and thread pinning.
 // Some problems with mutexes approach:
 // 1) performance significantly drops as number of threads increases
 // 2) CPU consumption increases with number of threads
@@ -17,18 +19,17 @@
 // 1) threads waste time on waiting since it adds some overhead
 // 2) the scheduler won't give them time quants when waiting thus not allowing to work when wait is close to its completion
 
-// Parameters:
-// num_threads=50, max_value=1000
-// Results:
-// std::mutex
-// main: 13414489 micros passed
-// main: 12973986 micros passed
-// SpinLockMutex
-// main: 12635709 micros passed
-// main: 12003058 micros passed
-// condition_variable
-// main: 39448 micros passed
-// main: 38970 micros passed
+/* 
+Lock-free increment with thread pinning
+./luxoft_test_task increment 10 10000
+main: 51041 micros passed
+main: 51580 micros passed
+
+std::mutex without thread pinning
+./luxoft_test_task increment 10 10000
+main: 61977 micros passed
+main: 60117 micros passed
+*/
 
 //  Created by Mikhail Gorshkov on 21.08.2021.
 //
@@ -40,13 +41,26 @@
 #include <condition_variable>
 #include <atomic>
 
+#include <cstring>
+#include <sched.h>
+
 //#define DEBUG_LOG
 
-//#define STD_MUTEX
-//#define SPINLOCK_MUTEX
-#define WAIT_NOTIFY
+//#define MODE STD_MUTEX
+//#define MODE SPINLOCK_MUTEX
+//#define MODE WAIT_NOTIFY
+#define MODE LOCK_FREE
+
+#define PIN_THREADS_TO_CPU
 
 #include "TimeLogger.hpp"
+
+static int pin_to_cpu(pthread_t thread_handle, int cpu) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu, &cpuset);
+    return pthread_setaffinity_np(thread_handle, sizeof(cpuset), &cpuset);
+}
 
 class SpinLockMutex {
 public:
@@ -74,6 +88,7 @@ public:
     ~Incrementer();
     
     bool inc();
+    bool atomic_inc();
     
 private:
     bool is_our_value() const;
@@ -106,7 +121,7 @@ private:
     std::atomic_int m_value{0};
     
     Mutex m_mutex;
-#ifdef WAIT_NOTIFY
+#if MODE == WAIT_NOTIFY
     std::condition_variable m_cv;
 #endif
 
@@ -123,6 +138,14 @@ Incrementer<Mutex>::Incrementer(Incrementers<Mutex>* parent, int total_threads, 
     , m_num_thread{num_thread}
     , m_max_value{max_value}
 {
+#ifdef PIN_THREADS_TO_CPU
+    static const unsigned int processor_count = std::thread::hardware_concurrency();
+    const int cpu = m_num_thread % processor_count;
+    int res = pin_to_cpu(m_thread.native_handle(), cpu);
+#ifdef DEBUG_LOG
+    std::cout << "Thread pinned to CPU " << cpu << " successfully" << std::endl;
+#endif
+#endif
 }
     
 template<typename Mutex>
@@ -132,7 +155,7 @@ Incrementer<Mutex>::~Incrementer() {
     
 template<typename Mutex>
 bool Incrementer<Mutex>::inc() {
-    if (m_parent->m_value > m_max_value) {
+    if (m_parent->m_value.load() > m_max_value) {
 #ifdef DEBUG_LOG
         std::cout << "m_value exceeded, returning false: " << m_parent->m_value << ", i=" << m_num_thread << std::endl;
 #endif
@@ -146,25 +169,41 @@ bool Incrementer<Mutex>::inc() {
 }
     
 template<typename Mutex>
+bool Incrementer<Mutex>::atomic_inc() {
+    int new_value;
+    int old_value = m_parent->m_value.load(std::memory_order_relaxed);
+    do
+    {
+       if (old_value % m_total_threads != m_num_thread)
+           return true;
+       if (old_value > m_max_value)
+	   return false;
+       new_value = old_value + 1;
+    } while (!m_parent->m_value.compare_exchange_weak(old_value, new_value, std::memory_order_relaxed,
+       std::memory_order_relaxed));
+#ifdef DEBUG_LOG
+    std::cout << "m_value=" << m_parent->m_value << ", m_num_thread=" << m_num_thread << std::endl;
+#endif
+    return true;
+}
+
+template<typename Mutex>
 bool Incrementer<Mutex>::is_our_value() const {
     return m_parent->m_value % m_total_threads == m_num_thread;
 }
 
 template<typename Mutex>
 void Incrementer<Mutex>::thread_proc() {
-    while (!m_parent->m_finish) {
-#if defined(STD_MUTEX) || defined(SPINLOCK_MUTEX)
-        if (!is_our_value()) {
-            continue;
-        }
+    while (!m_parent->m_finish.load(std::memory_order_relaxed)) {
+#if MODE == STD_MUTEX || MODE == SPINLOCK_MUTEX
         std::lock_guard<Mutex> lk(m_parent->m_mutex);
         if (!is_our_value()) {
             continue;
         }
         if (!inc()) {
-            m_parent->m_finish = true;
+            m_parent->m_finish.store(true, std::memory_order_relaxed);
         }
-#elif defined(WAIT_NOTIFY)
+#elif MODE == WAIT_NOTIFY
         {
             std::unique_lock<std::mutex> lk(m_parent->m_mutex);
             while (!m_parent->m_finish && !is_our_value()) {
@@ -178,6 +217,10 @@ void Incrementer<Mutex>::thread_proc() {
             }
         }
         m_parent->m_cv.notify_all();
+#elif MODE == LOCK_FREE
+	if (!atomic_inc()) {
+	    m_parent->m_finish = true;
+        }
 #endif
     }
 }
@@ -190,38 +233,17 @@ void do_work(int num_threads, int max_value) {
 }
 
 void increment(int num_threads, int max_value) {
-#ifdef STD_MUTEX
+#if MODE == STD_MUTEX || MODE == WAIT_NOTIFY || MODE == LOCK_FREE
     // std::mutex
     // first pass
     do_work<std::mutex>(num_threads, max_value);
     // second pass
     do_work<std::mutex>(num_threads, max_value);
-    // num_threads=50, max_value=1000
-    // main: 13414489 micros passed
-    // main: 12973986 micros passed
-    // Program ended with exit code: 0
-#elif defined(SPINLOCK_MUTEX)
+#elif MODE == SPINLOCK_MUTEX
     // SpinLockMutex
     // first pass
     do_work<SpinLockMutex>(num_threads, max_value);
     // second pass
     do_work<SpinLockMutex>(num_threads, max_value);
-    // num_threads=50, max_value=1000
-    // main: 12635709 micros passed
-    // main: 12003058 micros passed
-    // Program ended with exit code: 0
-    //Program ended with exit code: 0
-    //SpinLockMutex seems to perform a little better
-#elif defined(WAIT_NOTIFY)
-    // condition_variable
-    // first pass
-    do_work<std::mutex>(num_threads, max_value);
-    // second pass
-    do_work<std::mutex>(num_threads, max_value);
-    // Results:
-    // num_threads=50, max_value=1000
-    // main: 39448 micros passed
-    // main: 38970 micros passed
-    // Program ended with exit code: 0
 #endif
 }
